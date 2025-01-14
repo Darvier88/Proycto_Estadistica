@@ -2,12 +2,12 @@
 if (!require("readxl")) install.packages("readxl") # Lectura de archivos Excel
 if (!require("ggplot2")) install.packages("ggplot2")   # Creación de gráficos
 if (!require("dplyr")) install.packages("dplyr")  # Manipulación y transformación de datos
-if (!require("tdyr")) install.packages("tdyr")
+if (!require("tidyr")) install.packages("tdyr")
 # Carga de librerías
 library(readxl)
 library(ggplot2)
 library(dplyr)
-library(tdyr)
+library(tidyr)
 
 # Ruta al archivo Excel
 path <- "C:/Users/ASUS VIVOBOOK PRO/Downloads/PruebaDatos.xlsx"
@@ -65,15 +65,15 @@ proporciones <- datos %>%
 # Crear el gráfico de barras simples
 ggplot(proporciones, aes(x = Parte, y = Proporcion_Exito)) +
   geom_bar(stat = "identity", fill = "skyblue", color = "black") +  # Barras proporcionales
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5)
+  )+
   labs(
     title = "Proporción de Éxito por Parte del Pie",
     x = "Parte del Pie",
     y = "Proporción de Éxito"
-  ) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    plot.title = element_text(hjust = 0.5)
-  )
+  ) 
 
 # --- PARTE 3: MAPA DE CALOR ---
 # Calcular la proporción de éxito combinada por pierna y parte del pie
@@ -327,6 +327,13 @@ f_fracaso_observada <- 1 - f_exito_observada
 p_exito_teorico <- 0.515
 p_fracaso_teorico <- 1 - p_exito_teorico
 
+# Calcular frecuencias absolutas y guardarlas en un DataFrame
+frecuencias_absolutas_observadas <- data.frame(
+  Resultado = c("Éxito", "Fracaso"),
+  Frecuencia_Absoluta = c(f_exito_observada * n,
+                          f_fracaso_observada * n)
+)
+
 # Crear dataframes de frecuencias observadas y teóricas
 frecuencias_relativas_observadas <- data.frame(
   Resultado = c("Éxito", "Fracaso"),
@@ -395,13 +402,13 @@ print(prueba_mann_whitney)
 # Gráfico Boxplot
 ggplot(datos_RT, aes(x = Resultados, y = Tiempo, fill = Resultados)) +
   geom_boxplot() +
+  scale_fill_manual(values = c("lightblue", "lightcoral")) +
   labs(
     title = "Distribución de Tiempo por Resultado (Éxito vs. Fracaso)",
     x = "Resultado",
     y = "Tiempo"
   ) +
-  theme_minimal() +
-  scale_fill_manual(values = c("lightblue", "lightcoral"))
+  theme_minimal()
 
 # Prueba de Bondad de ajuste Chi-cuadrado
 observadas <- c(n * f_exito_observada, n * (1 - f_exito_observada))
@@ -472,10 +479,12 @@ ggplot(datos_largos_pierna, aes(x = Grupo, y = Tiempo, fill = Grupo)) +
   theme_minimal()
 
 # Prueba de Hipótesis 8: Kruskal-Wallis
+# Asegurarse de que los vectores sean numéricos
 tiempo_interno <- as.numeric(interno$Tiempo)
 tiempo_externo <- as.numeric(externo$Tiempo)
 tiempo_punta <- as.numeric(punta$Tiempo)
 
+# Crear el data frame en formato largo directamente
 datos_tiempo <- data.frame(
   Tiempo = c(tiempo_interno, tiempo_externo, tiempo_punta),
   Grupo = c(rep("Interno", length(tiempo_interno)), 
@@ -483,27 +492,14 @@ datos_tiempo <- data.frame(
             rep("Punta", length(tiempo_punta)))
 )
 
+# Prueba de Kruskal-Wallis
 prueba_kruskal <- kruskal.test(Tiempo ~ Grupo, data = datos_tiempo)
 print(prueba_kruskal)
 
-library(ggplot2)
-library(dplyr)
-library(tidyr)
-
-# Suponiendo que tiempo_interno, tiempo_externo y tiempo_punta son vectores numéricos
-# Crear un data frame para ggplot
-datos_tiempo_pie <- data.frame(
-  Interno = tiempo_interno,
-  Externo = tiempo_externo,
-  Punta = tiempo_punta
-)
-
-# Convertir el data frame a formato largo
-datos_largos_pie <- datos_tiempo_pie %>%
-  pivot_longer(cols = everything(), names_to = "Grupo", values_to = "Tiempo")
+datos_tiempo$Grupo <- factor(datos_tiempo$Grupo, levels = c("Interno", "Externo", "Punta"))
 
 # Crear el boxplot con ggplot2
-ggplot(datos_largos_pie, aes(x = Grupo, y = Tiempo, fill = Grupo)) +
+ggplot(datos_tiempo, aes(x = Grupo, y = Tiempo, fill = Grupo)) +
   geom_boxplot() +
   scale_fill_manual(values = c("Interno" = "skyblue", 
                                "Externo" = "lightgreen", 
