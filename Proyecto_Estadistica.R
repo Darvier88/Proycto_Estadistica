@@ -11,8 +11,13 @@ library(tidyr)
 
 # Ruta al archivo Excel
 path <- "C:/Users/ASUS VIVOBOOK PRO/Downloads/PruebaDatos.xlsx"
-
+path2 <- "C:/Users/ASUS VIVOBOOK PRO/Downloads/Datos_Agrupados.csv"
 # --- CARGA Y COMBINACIÓN DE DATOS ---
+
+datos <- bind_rows(lapply(hojas, function(hoja) {
+  read_excel(path, sheet = hoja)
+}))
+datos2 <- read.csv(path2) 
 
 # Leer las hojas del archivo Excel y añadir etiquetas para pierna y parte del pie
 punta_no_dominante <- read_excel(path, sheet = "Punta - No Dominante") %>%
@@ -149,15 +154,13 @@ convertir_a_numerico <- function(data) {
   return(data)
 }
 
-# Función para generar gráficos de frecuencia absoluta con ggplot2 (sin línea azul)
-generar_grafico_absoluto <- function(data, titulo_hoja, columna) {
-  # Eliminar valores NA
+# Frecuencia absoluta para datos enteros
+generar_grafico_absoluto_enteros <- function(data, titulo_hoja, columna) {
   data <- data[!is.na(data[[columna]]), ]
+  hist_data <- hist(data[[columna]], 
+                    breaks = seq(floor(min(data[[columna]]) - 0.5), ceiling(max(data[[columna]]) + 0.5), by = 1), 
+                    plot = FALSE)
   
-  # Crear histograma sin graficar
-  hist_data <- hist(data[[columna]], plot = FALSE)
-  
-  # Crear data frame para ggplot2
   hist_df <- data.frame(
     mids = hist_data$mids,
     counts = hist_data$counts,
@@ -165,130 +168,258 @@ generar_grafico_absoluto <- function(data, titulo_hoja, columna) {
     width = diff(hist_data$breaks)
   )
   
-  # Crear gráfico
   ggplot(hist_df, aes(x = mids, y = counts)) +
-    geom_bar(stat = "identity", fill = "skyblue", color = "black", width = hist_df$width[1]) +
+    geom_bar(stat = "identity", fill = "skyblue", color = "black", width = 1) +
     geom_text(aes(label = counts), vjust = -0.5, size = 3.5, color = "black") +
-    labs(
-      title = paste("Frecuencia Absoluta -", titulo_hoja),
-      x = columna,
-      y = "Frecuencia Absoluta"
-    ) +
+    labs(title = paste("Frecuencia Absoluta -", titulo_hoja), x = columna, y = "Frecuencia Absoluta") +
     theme_minimal() +
-    theme(plot.title = element_text(hjust = 0.5))  # Centrar el título
+    theme(plot.title = element_text(hjust = 0.5))
 }
 
-# Función para generar gráficos de frecuencia relativa con ggplot2
-generar_grafico_relativo <- function(data, titulo_hoja, columna) {
-  # Eliminar valores NA
+# Frecuencia absoluta para datos decimales
+# Frecuencia absoluta mejorada para datos decimales
+generar_grafico_absoluto_decimales <- function(data, titulo_hoja, columna, binwidth = 0.2) {
+  # Eliminar valores NA e infinitos
+  data <- data[!is.na(data[[columna]]) & is.finite(data[[columna]]), ]
+  
+  # Crear histograma con bins ajustados
+  ggplot(datos, aes(x = Tiempo)) +
+    geom_histogram(binwidth = 0.2, fill = "skyblue", color = "black", alpha = 0.8) +  # Color sólido
+    geom_text(stat = "bin", binwidth = 0.2, aes(label = ..count..), 
+              vjust = -0.5, size = 3) +
+    labs(title = "Frecuencia Absoluta - Tiempo",
+         x = "Tiempo",
+         y = "Frecuencia Absoluta") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+  
+}
+# Frecuencia relativa para datos enteros
+generar_grafico_relativo_enteros <- function(data, titulo_hoja, columna) {
+  # Eliminar valores NA de la columna seleccionada
   data <- data[!is.na(data[[columna]]), ]
   
-  # Crear histograma sin graficar
-  hist_data <- hist(data[[columna]], plot = FALSE, freq = FALSE)
+  # Crear el histograma sin graficar
+  hist_data <- hist(data[[columna]], 
+                    breaks = seq(floor(min(data[[columna]]) - 0.5), ceiling(max(data[[columna]]) + 0.5), by = 1), 
+                    plot = FALSE)
   
   # Calcular frecuencias relativas
   frecuencias_relativas <- hist_data$density * diff(hist_data$breaks)
-  suma_areas <- sum(frecuencias_relativas)
-  cat("La suma de las frecuencias relativas (debe ser 1):", suma_areas, "\n")
   
-  # Crear data frame para ggplot2
+  # Crear DataFrame para ggplot2
   hist_df <- data.frame(
-    mids = hist_data$mids,
-    density = frecuencias_relativas,
-    breaks = hist_data$breaks[-length(hist_data$breaks)],
-    width = diff(hist_data$breaks)
+    mids = hist_data$mids,                         # Puntos medios de los intervalos
+    density = frecuencias_relativas,              # Frecuencia relativa
+    breaks = hist_data$breaks[-length(hist_data$breaks)],  # Límites de intervalos
+    width = diff(hist_data$breaks)               # Ancho de los intervalos
   )
   
-  # Crear gráfico
+  # Crear el gráfico
   ggplot(hist_df, aes(x = mids, y = density)) +
-    geom_bar(stat = "identity", fill = "lightgreen", color = "black", width = hist_df$width[1]) +
-    geom_line(aes(x = mids, y = density), color = "blue", size = 1) +
-    geom_point(aes(x = mids, y = density), color = "blue", size = 2) +
-    geom_text(aes(label = round(density, 3)), vjust = -0.5, size = 3.5, color = "black") +
+    geom_bar(stat = "identity", fill = "lightgreen", color = "black", width = 1, alpha = 0.8) +  # Barras verdes
+    geom_line(aes(x = mids, y = density), color = "blue", size = 1) +  # Línea de densidad azul
+    geom_point(aes(x = mids, y = density), color = "blue", size = 2) +  # Puntos de densidad
+    geom_text(aes(label = round(density, 3)), vjust = -0.5, size = 3) +  # Etiquetas de frecuencia
     labs(
       title = paste("Frecuencia Relativa -", titulo_hoja),
       x = columna,
       y = "Frecuencia Relativa"
     ) +
     theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))
+}
+
+
+# Frecuencia relativa para datos decimales (mejorada)
+generar_grafico_relativo_decimales <- function(data, titulo_hoja, columna, binwidth = 0.1) {
+  # Eliminar valores NA e infinitos
+  data <- data[!is.na(data[[columna]]) & is.finite(data[[columna]]), ]
+  
+  # Crear histograma sin graficar con bins ajustados
+  hist_data <- hist(data[[columna]], 
+                    breaks = seq(floor(min(data[[columna]])) - (binwidth / 2), 
+                                 ceiling(max(data[[columna]])) + (binwidth / 2), 
+                                 by = binwidth), 
+                    plot = FALSE, freq = FALSE)
+  
+  # Calcular frecuencias relativas
+  frecuencias_relativas <- hist_data$density * diff(hist_data$breaks)
+  
+  # Crear DataFrame para ggplot2
+  hist_df <- data.frame(
+    mids = hist_data$mids,            # Puntos medios de los bins
+    density = frecuencias_relativas,  # Frecuencia relativa
+    breaks = hist_data$breaks[-length(hist_data$breaks)],  # Límites de los bins
+    width = diff(hist_data$breaks)    # Ancho de los bins
+  )
+  
+  # Crear gráfico mejorado con ggplot2
+  ggplot(hist_df, aes(x = mids, y = density)) +
+    geom_bar(stat = "identity", fill = "lightgreen", color = "black", width = binwidth, alpha = 0.8) +  # Barras sólidas
+    geom_line(aes(x = mids, y = density), color = "blue", size = 1) +   # Línea de densidad azul
+    geom_point(aes(x = mids, y = density), color = "blue", size = 2) +  # Puntos de densidad
+    geom_text(aes(label = round(density, 3)), vjust = -0.5, size = 3, color = "black", angle = 45) +  # Etiquetas rotadas
+    labs(
+      title = paste("Frecuencia Relativa -", titulo_hoja),
+      x = columna,
+      y = "Frecuencia Relativa"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      axis.text.x = element_text(angle = 45, hjust = 1)  # Rotar etiquetas del eje X
+    )
+}
+
+# DataFrame para pierna Dominante
+pierna_dominante <- subset(datos2, Tipo.de.Pierna == "Dominante")
+
+# DataFrame para pierna No dominante
+pierna_no_dominante <- subset(datos2, Tipo.de.Pierna == "No Dominante")
+
+# DataFrame para Borde externo
+parte_borde_externo <- subset(datos2, Parte.del.Pie == "Externo")
+
+# DataFrame para Borde interno
+parte_borde_interno <- subset(datos2, Parte.del.Pie == "Interno")
+
+# DataFrame para Punta
+parte_punta <- subset(datos2, Parte.del.Pie == "Punta")
+
+# Dominante - Borde externo
+dominante_borde_externo <- subset(datos2, Tipo.de.Pierna == "Dominante" & Parte.del.Pie == "Externo")
+
+# Dominante - Borde interno
+dominante_borde_interno <- subset(datos2, Tipo.de.Pierna == "Dominante" & Parte.del.Pie == "Interno")
+
+# Dominante - Punta
+dominante_punta <- subset(datos2, Tipo.de.Pierna == "Dominante" & Parte.del.Pie == "Punta")
+
+# No dominante - Borde externo
+no_dominante_borde_externo <- subset(datos2, Tipo.de.Pierna == "No Dominante" & Parte.del.Pie == "Externo")
+
+# No dominante - Borde interno
+no_dominante_borde_interno <- subset(datos2, Tipo.de.Pierna == "No Dominante" & Parte.del.Pie == "Interno")
+
+# No dominante - Punta
+no_dominante_punta <- subset(datos2, Tipo.de.Pierna == "No Dominante" & Parte.del.Pie == "Punta")
+
+# Especificar la columna que se analizará 
+columna <- "Tiempo"
+columna2 <- "Resultados"
+
+# Gráficos de Frecuencia Absoluta (Datos Enteros - datos2)
+print(generar_grafico_absoluto_enteros(datos2, "Generales", columna2))
+print(generar_grafico_absoluto_enteros(pierna_dominante, "Pierna Dominante", columna2))
+print(generar_grafico_absoluto_enteros(pierna_no_dominante, "Pierna No Dominante", columna2))
+print(generar_grafico_absoluto_enteros(parte_borde_externo, "Parte Borde Externo", columna2))
+print(generar_grafico_absoluto_enteros(parte_borde_interno, "Parte Borde Interno", columna2))
+print(generar_grafico_absoluto_enteros(parte_punta, "Parte Punta", columna2))
+print(generar_grafico_absoluto_enteros(dominante_borde_externo, "Dominante - Borde Externo", columna2))
+print(generar_grafico_absoluto_enteros(dominante_borde_interno, "Dominante - Borde Interno", columna2))
+print(generar_grafico_absoluto_enteros(dominante_punta, "Dominante - Punta", columna2))
+print(generar_grafico_absoluto_enteros(no_dominante_borde_externo, "No Dominante - Borde Externo", columna2))
+print(generar_grafico_absoluto_enteros(no_dominante_borde_interno, "No Dominante - Borde Interno", columna2))
+print(generar_grafico_absoluto_enteros(no_dominante_punta, "No Dominante - Punta", columna2))
+
+# Gráfico de Frecuencia Absoluta para Datos Decimales (Tiempo)
+print(generar_grafico_absoluto_decimales(datos, "Tiempo", columna))
+
+
+# Gráficos de Frecuencia Relativa (Datos Enteros - datos2)
+print(generar_grafico_relativo_enteros(datos2, "Generales", columna2))
+print(generar_grafico_relativo_enteros(pierna_dominante, "Pierna Dominante", columna2))
+print(generar_grafico_relativo_enteros(pierna_no_dominante, "Pierna No Dominante", columna2))
+print(generar_grafico_relativo_enteros(parte_borde_externo, "Parte Borde Externo", columna2))
+print(generar_grafico_relativo_enteros(parte_borde_interno, "Parte Borde Interno", columna2))
+print(generar_grafico_relativo_enteros(parte_punta, "Parte Punta", columna2))
+print(generar_grafico_relativo_enteros(dominante_borde_externo, "Dominante - Borde Externo", columna2))
+print(generar_grafico_relativo_enteros(dominante_borde_interno, "Dominante - Borde Interno", columna2))
+print(generar_grafico_relativo_enteros(dominante_punta, "Dominante - Punta", columna2))
+print(generar_grafico_relativo_enteros(no_dominante_borde_externo, "No Dominante - Borde Externo", columna2))
+print(generar_grafico_relativo_enteros(no_dominante_borde_interno, "No Dominante - Borde Interno", columna2))
+print(generar_grafico_relativo_enteros(no_dominante_punta, "No Dominante - Punta", columna2))
+
+# Gráfico de Frecuencia Relativa para Datos Decimales (Tiempo)
+print(generar_grafico_relativo_decimales(datos, "Tiempo", columna))
+# Convertir columnas a los tipos adecuados
+datos2 <- datos2 %>%
+  mutate(
+    Resultados = as.numeric(Resultados),  # Convertir Resultados a numérico
+    Parte.del.Pie = as.factor(Parte.del.Pie)  # Convertir Parte.del.Pie a factor
+  )
+
+# Función para generar gráficos de línea
+generar_grafico_linea <- function(data, categoria_col, categoria_valor, result_col) {
+  # Filtrar datos por categoría
+  data_filtrada <- data %>% filter(!!sym(categoria_col) == categoria_valor)
+  
+  # Verificar si hay datos suficientes después del filtrado
+  if (nrow(data_filtrada) == 0) {
+    warning(paste("No hay datos disponibles para la categoría:", categoria_valor))
+    return(NULL)
+  }
+  
+  # Calcular la cantidad de resultados por valor
+  datos_agrupados <- data_filtrada %>%
+    group_by(!!sym(result_col)) %>%
+    summarise(Conteo = n(), .groups = "drop")
+  
+  # Crear el gráfico de línea
+  ggplot(datos_agrupados, aes(x = !!sym(result_col), y = Conteo)) +
+    geom_line(color = "blue", size = 1) +
+    geom_point(color = "red", size = 2) +
+    labs(
+      title = paste("Distribución de Resultados -", categoria_valor),
+      x = "Resultados",
+      y = "Frecuencia"
+    ) +
+    theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5))  # Centrar el título
 }
 
-# Cargar y convertir los datos de cada hoja del archivo
-externo_dominante <- convertir_a_numerico(read_excel(path, sheet = "Externo - Dominante"))
-externo_no_dominante <- convertir_a_numerico(read_excel(path, sheet = "Externo - No Dominante"))
-interno_dominante <- convertir_a_numerico(read_excel(path, sheet = "Interno - Dominante"))
-interno_no_dominante <- convertir_a_numerico(read_excel(path, sheet = "Interno - No Dominante"))
-punta_dominante <- convertir_a_numerico(read_excel(path, sheet = "Punta - Dominante"))
-punta_no_dominante <- convertir_a_numerico(read_excel(path, sheet = "Punta - No Dominante"))
+# Generar gráficos para cada categoría en Parte.del.Pie
+categorias <- unique(datos2$Parte.del.Pie)
+graficos <- list()
 
-# Especificar la columna que se analizará en cada hoja
-columna <- "Tiempo"
-
-# Generar gráficos de frecuencia absoluta
-print(generar_grafico_absoluto(externo_dominante, "Externo - Dominante", columna))
-print(generar_grafico_absoluto(externo_no_dominante, "Externo - No Dominante", columna))
-print(generar_grafico_absoluto(interno_dominante, "Interno - Dominante", columna))
-print(generar_grafico_absoluto(interno_no_dominante, "Interno - No Dominante", columna))
-print(generar_grafico_absoluto(punta_dominante, "Punta - Dominante", columna))
-print(generar_grafico_absoluto(punta_no_dominante, "Punta - No Dominante", columna))
-
-# Generar gráficos de frecuencia relativa
-print(generar_grafico_relativo(externo_dominante, "Externo - Dominante", columna))
-print(generar_grafico_relativo(externo_no_dominante, "Externo - No Dominante", columna))
-print(generar_grafico_relativo(interno_dominante, "Interno - Dominante", columna))
-print(generar_grafico_relativo(interno_no_dominante, "Interno - No Dominante", columna))
-print(generar_grafico_relativo(punta_dominante, "Punta - Dominante", columna))
-print(generar_grafico_relativo(punta_no_dominante, "Punta - No Dominante", columna))
-# Tamaño del intervalo para agrupar los datos
-interval_size <- 0.5  # Intervalo de agrupación en segundos
-
-# Función para procesar los datos y generar el gráfico
-generar_grafico <- function(sheet_name) {
-  # Leer los datos desde la hoja especificada
-  data <- read_excel(path, sheet = sheet_name)
-  
-  # Convertir las columnas a numérico y manejar posibles valores no válidos
-  data <- data %>%
-    mutate(
-      Tiempo = as.numeric(Tiempo),  # Convertir columna "Tiempo" a numérico
-      Resultados = as.numeric(Resultados)  # Convertir columna "Resultados" a numérico
-    ) %>%
-    filter(!is.na(Tiempo), !is.na(Resultados))  # Eliminar filas con valores NA
-  
-  # Agrupar los datos en intervalos de tiempo y calcular el promedio de aciertos
-  data <- data %>%
-    mutate(Intervalo = floor(Tiempo / interval_size) * interval_size) %>%  # Crear intervalos de tiempo
-    group_by(Intervalo) %>%  # Agrupar por intervalos
-    summarise(Promedio_Aciertos = mean(Resultados, na.rm = TRUE))  # Calcular promedio de "Resultados"
-  
-  # Crear y devolver el gráfico
-  ggplot(data, aes(x = Intervalo, y = Promedio_Aciertos)) +
-    geom_line(color = "blue") +  # Línea azul para representar la tendencia
-    geom_point(color = "red") +  # Puntos rojos para resaltar los valores individuales
-    labs(
-      title = paste("Evolución del promedio de aciertos\n(", sheet_name, ")", sep = ""),  # Título del gráfico
-      x = "Intervalo de Tiempo (s)",  # Etiqueta del eje X
-      y = "Promedio de aciertos"  # Etiqueta del eje Y
-    ) +
-    theme_minimal()  # Tema minimalista para un diseño limpio
+for (categoria in categorias) {
+  grafico <- generar_grafico_linea(
+    data = datos2,
+    categoria_col = "Parte.del.Pie",
+    categoria_valor = categoria,
+    result_col = "Resultados"
+  )
+  if (!is.null(grafico)) {
+    graficos[[categoria]] <- grafico
+    print(grafico)
+  }
 }
+#-----------------------------------
 
-# Generar gráficos para cada hoja del archivo Excel
-grafico_punta_no_dominante <- generar_grafico("Punta - No Dominante")
-grafico_punta_dominante <- generar_grafico("Punta - Dominante")
-grafico_interno_no_dominante <- generar_grafico("Interno - No Dominante")
-grafico_interno_dominante <- generar_grafico("Interno - Dominante")
-grafico_externo_no_dominante <- generar_grafico("Externo - No Dominante")
-grafico_externo_dominante <- generar_grafico("Externo - Dominante")
+# Filtrar los datos para los éxitos (Resultados mayores a 0)
+datos_exitos <- datos2 %>%
+  filter(Resultados > 0)
 
-# Mostrar los gráficos en la consola
-print(grafico_punta_no_dominante)
-print(grafico_punta_dominante)
-print(grafico_interno_no_dominante)
-print(grafico_interno_dominante)
-print(grafico_externo_no_dominante)
-print(grafico_externo_dominante)
+# Calcular la cantidad de éxitos por cada valor en "Resultados"
+datos_agrupados <- datos_exitos %>%
+  group_by(Resultados) %>%
+  summarise(Conteo = n(), .groups = "drop")
+
+# Crear un gráfico general de los éxitos
+grafico_exitos <- ggplot(datos_agrupados, aes(x = Resultados, y = Conteo)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "red", size = 2) +
+  labs(
+    title = "Distribución General de Éxitos",
+    x = "Resultados (Éxitos)",
+    y = "Frecuencia"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))  # Centrar el título
+print(grafico_exitos)
+
 # Función para cargar y añadir columnas 'Pierna' y 'Parte'
 leer_datos <- function(sheet_name, pierna, parte) {
   read_excel(path, sheet = sheet_name) %>%
@@ -411,18 +542,70 @@ ggplot(datos_RT, aes(x = Resultados, y = Tiempo, fill = Resultados)) +
   theme_minimal()
 
 # Prueba de Bondad de ajuste Chi-cuadrado
-observadas <- c(n * f_exito_observada, n * (1 - f_exito_observada))
-esperadas <- c(n * p_exito_teorico, n * (1 - p_exito_teorico))
-prueba_chi_ajuste <- chisq.test(x = observadas, p = esperadas / sum(esperadas))
-print(prueba_chi_ajuste)
+# Definir parámetros
+n2 <- 5  # Número de ensayos (máximo valor de 'Resultados')
+p_teorico <- 0.515  # Probabilidad teórica de éxito
 
-# Gráfico Q-Q
+# Calcular frecuencias observadas
+frecuencias_obs <- table(datos2$Resultados)
+
+# Calcular frecuencias esperadas bajo la distribución binomial con p = 0.515
+frecuencias_esp <- dbinom(0:n2, size = n2, prob = p_teorico) * sum(frecuencias_obs)
+
+# Verificar que las frecuencias observadas y esperadas tengan la misma longitud
+if (length(frecuencias_obs) != length(frecuencias_esp)) {
+  stop("Error: Las frecuencias observadas y esperadas no tienen la misma longitud.")
+}
+
+# Prueba de Chi-cuadrado
+chi_test <- chisq.test(frecuencias_obs, p = frecuencias_esp / sum(frecuencias_esp), rescale.p = TRUE)
+
+# Mostrar resultado de la prueba
+cat("\nPrueba de Bondad de Ajuste a la Distribución Binomial\n")
+print(chi_test)
+
+# Gráficos Q-Q Antiguo (Lo dejo aqui porque no se logro quitar en el informe)
 n_ensayos <- 5
 datos_observados <- c(rep(5, 576), rep(0, 924))
 cuantiles_teoricos <- qbinom(ppoints(length(datos_observados)), size = n_ensayos, prob = p_exito_teorico)
 qqplot(cuantiles_teoricos, datos_observados, main = "Q-Q Plot para Distribución Binomial", 
        xlab = "Cuantiles Teóricos (Binomial)", ylab = "Datos Observados")
 abline(0, 1, col = "red", lwd = 2)
+
+n_ensayos <- 5
+# Probabilidad observada
+p_exito_observado <- 0.384
+
+datos_observados <- c(rep(5, 576), rep(0, 924))
+
+# Calcular los cuantiles teóricos con la probabilidad observada
+cuantiles_teoricos <- qbinom(ppoints(length(datos_observados)), size = n_ensayos, prob = p_exito_observado)
+
+# Generar el Q-Q Plot
+qqplot(cuantiles_teoricos, datos_observados, 
+       main = "Q-Q Plot para Distribución Binomial con Probabilidad Observada", 
+       xlab = "Cuantiles Teóricos (Binomial)", 
+       ylab = "Datos Observados")
+abline(0, 1, col = "blue", lwd = 2)
+
+#Grafico Q-Q nuevo
+# Parámetros de la distribución binomial
+n2 <- 5          # Número de ensayos
+p_teorico <- 0.515  # Probabilidad teórica de éxito
+
+# Generar una muestra aleatoria de la distribución binomial con p = 0.515
+set.seed(123)  # Asegura reproducibilidad
+muestra_binomial <- rbinom(n = length(datos2$Resultados), size = n2, prob = p_teorico)
+
+# QQ-Plot: Comparar los cuantiles de los datos con la distribución binomial teórica
+qqplot(muestra_binomial, datos2$Resultados,
+       main = "QQ-Plot: Datos vs Distribución Binomial (p = 0.515)",
+       xlab = "Cuantiles Teóricos (Binomial)",
+       ylab = "Cuantiles de los Datos",
+       pch = 19, col = "blue")
+abline(0, 1, col = "red", lwd = 2)
+
+
 
 # Prueba de Kolmogorov-Smirnov
 datos_normalizados <- scale(datos_RT$Tiempo)
@@ -510,3 +693,55 @@ ggplot(datos_tiempo, aes(x = Grupo, y = Tiempo, fill = Grupo)) +
     x = "Grupo"
   ) +
   theme_minimal()
+# Normalización de los datos para la prueba Kolmogorov-Smirnov
+resultados_norm <- scale(datos2$Resultados) # Escalar y centrar los datos
+
+# Prueba de Kolmogorov-Smirnov para distribución normal en datos normalizados
+ks_test_normal <- ks.test(resultados_norm, "pnorm") # Prueba KS con distribución normal estándar
+
+# Resultados
+cat("\nPrueba de Kolmogorov-Smirnov para distribución normal (Datos Normalizados):\n")
+print(ks_test_normal)
+
+# Normalizar los datos (media 0, desviación estándar 1)
+datos_normalizados2 <- scale(datos2$Resultados)
+
+# QQ-Plot con datos normalizados
+qqnorm(datos_normalizados2,
+       main = "QQ-Plot: Datos Normalizados vs Distribución Normal",
+       xlab = "Cuantiles Teóricos (Normal)",
+       ylab = "Cuantiles de los Datos Normalizados",
+       col = "green", pch = 19)
+qqline(datos_normalizados, col = "red", lwd = 2)
+
+# Comparación de promedios entre pierna dominante y no dominante
+ttest_pierna <- t.test(pierna_dominante$Resultados, pierna_no_dominante$Resultados, var.equal = FALSE)
+
+cat("\nPrueba T para comparación de promedios entre pierna dominante y no dominante:\n")
+print(ttest_pierna)
+
+# Crear el boxplot
+ggplot(datos2, aes(x = Tipo.de.Pierna, y = Resultados, fill = Tipo.de.Pierna)) +
+  geom_boxplot() +
+  labs(title = "Comparación de Resultados por Tipo de Pierna",
+       x = "Tipo de Pierna",
+       y = "Resultados") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_brewer(palette = "Set2")
+
+# Realizar ANOVA
+anova_model <- aov(Resultados ~ Parte.del.Pie, data = datos2)
+anova_summary <- summary(anova_model)
+
+cat("\nPrueba ANOVA para comparación de promedios entre partes del pie:\n")
+print(anova_summary)
+
+ggplot(datos2, aes(x = Parte.del.Pie, y = Resultados, fill = Parte.del.Pie)) +
+  geom_boxplot() +
+  labs(title = "Comparación de Resultados por Parte del Pie",
+       x = "Parte del Pie",
+       y = "Resultados") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_brewer(palette = "Set2")
